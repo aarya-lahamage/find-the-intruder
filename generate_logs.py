@@ -1,8 +1,11 @@
-"""Generate a realistic auth/server log with a hidden attacker.
+"""Generate a realistic auth/server log with hidden attackers.
 
-Usage: python generate_logs.py            -> data/auth_logs.csv
+Usage: python generate_logs.py            -> data/auth_logs.csv        (single intruder)
+       python generate_logs.py --multi    -> data/auth_logs_multi.csv  (several actors and decoys)
 """
+import os
 import random
+import sys
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -30,6 +33,11 @@ def _profile(i, user):
 
 
 PROFILES = {u: _profile(i, u) for i, u in enumerate(USERS, start=1)}
+_STATE = random.getstate()          # add this line right after PROFILES
+
+def main(path="data/auth_logs.csv", extended=False):
+    random.setstate(_STATE)         # add as first line of main()
+    ...
 
 
 def _row(ts, user, ip, country, event, resource="", nbytes=0):
@@ -89,12 +97,76 @@ def attack():
     return rows
 
 
-def main(path="data/auth_logs.csv"):
-    df = pd.DataFrame(normal_traffic() + decoy_traveller() + attack())
+# ---------------------------------------------------------------- extra scenarios (multi-actor sample)
+def distributed_spray():
+    """Four IPs, each failing a few times on a few shared accounts. Every IP stays below the per-IP
+    brute force and spray thresholds. One of them then logs in as a targeted account."""
+    plan = [("45.155.205.18", "NL", ["admin", "priya", "rahul"]),
+            ("103.152.220.9", "CN", ["admin", "rahul", "neha"]),
+            ("177.75.40.213", "BR", ["admin", "priya", "neha"]),
+            ("91.240.118.60", "UA", ["priya", "rahul", "neha"])]
+    base = START + timedelta(days=2, hours=14, minutes=5)
+    rows = []
+    for k, (ip, country, users) in enumerate(plan):
+        t = base + timedelta(minutes=7 * k)
+        for u in users:
+            for _ in range(2):
+                t += timedelta(minutes=random.randint(3, 5), seconds=random.randint(0, 59))
+                rows.append(_row(t, u, ip, country, "login_failed"))
+        if ip == "103.152.220.9":
+            t += timedelta(minutes=6)
+            rows.append(_row(t, "neha", ip, country, "login_success"))
+            t += timedelta(minutes=4)
+            rows.append(_row(t, "neha", ip, country, "file_download", "/crm/leads.csv", 4_200_000))
+    return rows
+
+
+def lone_brute_force():
+    """One IP guesses one account 14 times and never gets in."""
+    t = START + timedelta(hours=16, minutes=30)
+    rows = []
+    for _ in range(14):
+        t += timedelta(seconds=random.randint(15, 30))
+        rows.append(_row(t, "sara", "198.51.100.23", "TR", "login_failed"))
+    return rows
+
+
+def forgotten_password():
+    """A user mistypes a password a few times, then gets in from the usual IP. Harmless."""
+    p = PROFILES["karan"]
+    t = START + timedelta(days=1, hours=9, minutes=40)
+    rows = []
+    for _ in range(6):
+        t += timedelta(seconds=random.randint(20, 40))
+        rows.append(_row(t, "karan", p["ip"], p["country"], "login_failed"))
+    t += timedelta(seconds=30)
+    rows.append(_row(t, "karan", p["ip"], p["country"], "login_success"))
+    return rows
+
+
+def travel_pair():
+    """Same user, two countries, 40 minutes apart."""
+    p = PROFILES["emma"]
+    t = START + timedelta(days=2, hours=10)
+    return [_row(t, "emma", p["ip"], p["country"], "login_success"),
+            _row(t + timedelta(minutes=40), "emma", "175.41.128.77", "SG", "login_success"),
+            _row(t + timedelta(minutes=46), "emma", "175.41.128.77", "SG", "file_download",
+                 "/docs/report.pdf", 2_500_000)]
+
+
+def main(path="data/auth_logs.csv", extended=False):
+    rows = normal_traffic() + decoy_traveller() + attack()
+    if extended:
+        rows += distributed_spray() + lone_brute_force() + forgotten_password() + travel_pair()
+    df = pd.DataFrame(rows)
     df = df.sort_values("timestamp").reset_index(drop=True)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     df.to_csv(path, index=False)
     print(f"wrote {len(df)} events -> {path}")
 
 
 if __name__ == "__main__":
-    main()
+    if "--multi" in sys.argv:
+        main("data/auth_logs_multi.csv", extended=True)
+    else:
+        main()

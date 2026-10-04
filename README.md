@@ -1,51 +1,23 @@
-# 🛡️ Find the Intruder (ALG-CYBER-01, Algothon'26)
+# Find the Intruder
 
-Upload authentication logs and get the attacker, a correlated incident timeline, per-IP risk scores and an auto-written attack story.
+A rule-based SOC triage console for authentication and access logs. It ingests a log, detects attack
+patterns, correlates them into incidents, scores risk with a fully itemised breakdown, and shows the exact
+log rows behind every finding.
 
-## Run locally
-```bash
-pip install -r requirements.txt
-python generate_logs.py        # optional, the app creates the sample log itself
-streamlit run app.py
-python tests/test_detector.py  # tests
-```
+ALGOTHON'26 cybersecurity track. Team: [team name]. Members: [names].
 
-## Architecture
-```mermaid
-flowchart LR
-  A[CSV log upload / sample] --> B[load_logs: validate + clean]
-  B --> C[Rules engine]
-  C --> D[Alerts]
-  D --> E[Per-IP risk score]
-  E --> F[Incident builder: correlate by IP + user]
-  F --> G[Timeline + attack story]
-  G --> H[Streamlit SOC dashboard]
-```
+## What it does
 
-## Detection rules
-| Rule | Logic | Stage |
-|---|---|---|
-| brute_force | >=10 failed logins from one IP in 10 min (also flags password spray) | Initial Access |
-| success_after_bf | successful login from that IP afterwards | Credential Access |
-| new_geo | login from a country other than the user's usual one | Anomaly |
-| off_hours | 00-05h activity for a user who never works then | Anomaly |
-| priv_esc | privilege_change event | Privilege Escalation |
-| data_exfil | >=200 MB downloaded by one user/IP in an hour | Exfiltration |
-| log_tamper | log_cleared event | Defense Evasion |
+1. Ingests a CSV log and reports data quality (rows read, malformed rows dropped, duplicates).
+2. Runs 10 detection rules and produces alerts. Each alert carries the exact log rows that triggered it.
+3. Scores each source IP from 0 to 100. Every point is listed with the reason it was added.
+4. Builds incidents from IPs above the threshold, with a timeline, evidence table, ATT&CK mapping,
+   recommended actions, and a story that is labelled as interpretation, separate from observed facts.
+5. Correlates across IPs: distributed credential attacks (campaigns) and impossible travel.
+6. Lets the analyst investigate by IP or user, search the raw log, replay an attack step by step, and
+   export reports (Markdown, JSON, evidence CSV, blocklist CSV).
+7. Saves incident status and analyst notes to `data/case_state.json`.
 
-Alerts are summed per IP into a 0-100 risk score (each rule counted once). IPs scoring >=70 become an **incident**, whose alerts are ordered into a kill-chain timeline. Single weak signals (e.g. a user travelling abroad) stay low-risk and do not raise an incident.
+Detection is rule-based. There is no machine learning.
 
-## Edge cases handled
-Missing/extra columns, empty file, bad timestamps, normal typo failures (no false positive), travelling user decoy, clean log (no incident).
-
-## Known limitations
-Rule thresholds are fixed, not learned. Correlation is keyed on IP (an attacker rotating IPs would produce several incidents). Needs the CSV schema above.
-
-## Future work
-Per-user adaptive baselines, IP reputation feeds, multi-IP correlation, live log streaming, ML anomaly scoring.
-
-## AI disclosure
-Code was written with AI assistance (Claude). No external APIs or datasets: sample logs are synthetic (`generate_logs.py`).
-
-## Deploy (Streamlit Community Cloud)
-Push this repo to GitHub -> share.streamlit.io -> New app -> select repo, branch `main`, file `app.py`.
+#

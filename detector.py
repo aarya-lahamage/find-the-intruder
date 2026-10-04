@@ -425,7 +425,7 @@ def build_incidents(df, alerts, ip_scores, params=None) -> list[Incident]:
 
         fails = df[(df.ip == row.ip) & (df.event == "login_failed")]
         related = sorted(set(fails.user) | {a["user"] for a in tl})
-        severity = "critical" if row.score >= 90 else "high"
+        severity = "critical" if row.score >= 90 else "high" if row.score >= 65 else "medium"
         n = len(incidents) + 1
         incidents.append(Incident(
             row.ip, int(row.score), tl[0]["time"], tl[-1]["time"], victim, tl,
