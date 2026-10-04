@@ -6,3 +6,5 @@ __pycache__/
 
   data/case_state.json
   .pytest_cache/
+data/case_state.json
+.pytest_cache/
