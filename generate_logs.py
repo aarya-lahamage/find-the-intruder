@@ -36,8 +36,8 @@ PROFILES = {u: _profile(i, u) for i, u in enumerate(USERS, start=1)}
 _STATE = random.getstate()          # add this line right after PROFILES
 
 def main(path="data/auth_logs.csv", extended=False):
-    random.setstate(_STATE)         # add as first line of main()
-    ...
+      random.setstate(_STATE)
+      rows = normal_traffic() + ...   # baaki code same
 
 
 def _row(ts, user, ip, country, event, resource="", nbytes=0):
